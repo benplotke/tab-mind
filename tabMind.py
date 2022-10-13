@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from uuid import uuid4 as newUuid
-from typing import Union
+from enum import Enum
 
 URLS = "urls"
 TOPICS = "topics"
@@ -12,17 +12,22 @@ URL = "url"
 TOPIC = "topic"
 DATA_PATH = "tabs.json"
 
-topics: dict[str, Topic] = {}
-urls: dict[str, Url] = {}
+nodes: dict[str, Node] = {}
 idToNode: dict[str, Node] = {}
 edges: set[frozenset[str]] = set()
 
 
-class Url:
-    def __init__(self, uuid: str, name: str, neighbors: set[Node]):
+class NodeType(Enum):
+    URL = 1
+    TOPIC = 2
+
+
+class Node:
+    def __init__(self, uuid: str, name: str, nodeType: NodeType, neighbors: set[Node] = None):
         self.id = uuid
         self.name = name
-        self.neighbors = neighbors
+        self.type = nodeType
+        self.neighbors = set() if neighbors is None else neighbors
         self.visited = False
 
     def __str__(self):
@@ -39,42 +44,17 @@ class Url:
 
     @classmethod
     def newUrl(cls, url: str):
-        return cls(str(newUuid()), url, set())
-
-
-class Topic:
-    def __init__(self, uuid: str, name: str, neighbors: set[Node]):
-        self.id = uuid
-        self.name = name
-        self.neighbors = neighbors
-        self.visited = False
-
-    def __str__(self):
-        return f"topic:{self.name} id:{self.id}"
-
-    def __lt__(self, other):
-        return self.name < other.name
-
-    def __eq__(self, other):
-        return self.name == other.name
-
-    def __hash__(self):
-        return hash(self.name)
+        return cls(str(newUuid()), url, NodeType.URL)
 
     @classmethod
     def newTopic(cls, topic: str):
-        return cls(str(newUuid()), topic, set())
-
-
-Node = Union[Url, Topic]
+        return cls(str(newUuid()), topic, NodeType.TOPIC)
 
 
 def getNode(identifier: str):
     if identifier in idToNode:
         return idToNode[identifier]
-    if identifier in topics:
-        return topics[identifier]
-    return urls[identifier]
+    return nodes[identifier]
 
 
 def validate(filePath: str):
@@ -116,14 +96,14 @@ def load():
     for rawUrl in data[URLS]:
         uuid = rawUrl[ID]
         urlStr = rawUrl[URL]
-        url = Url(uuid, urlStr, set())
-        urls[urlStr] = url
+        url = Node(uuid, urlStr, NodeType.URL)
+        nodes[urlStr] = url
         idToNode[uuid] = url
     for rawTopic in data[TOPICS]:
         uuid = rawTopic[ID]
         topicStr = rawTopic[TOPIC]
-        topic = Topic(uuid, topicStr, set())
-        topics[topicStr] = topic
+        topic = Node(uuid, topicStr, NodeType.TOPIC)
+        nodes[topicStr] = topic
         idToNode[uuid] = topic
     for rawEdge in data[EDGES]:
         try:
@@ -138,10 +118,11 @@ def load():
 
 def save():
     data = {URLS: [], TOPICS: [], EDGES: []}
-    for url in urls.values():
-        data[URLS].append({ID: url.id, URL: url.name})
-    for topic in topics.values():
-        data[TOPICS].append({ID: topic.id, TOPIC: topic.name})
+    for url in nodes.values():
+        if url.type == NodeType.URL:
+            data[URLS].append({ID: url.id, URL: url.name})
+        else:
+            data[TOPICS].append({ID: url.id, TOPIC: url.name})
     for edge in edges:
         data[EDGES].append(list(edge))
     with open(DATA_PATH, "w") as f:
@@ -149,13 +130,15 @@ def save():
 
 
 def printUrls():
-    for url in sorted(urls.values()):
-        print(url)
+    for node in sorted(nodes.values()):
+        if node.type == NodeType.URL:
+            print(node)
 
 
 def printTopics():
-    for topic in sorted(topics.values()):
-        print(topic)
+    for node in sorted(nodes.values()):
+        if node.type == NodeType.TOPIC:
+            print(node)
 
 
 def printNodes(nodeId: str, distance: int):
@@ -163,10 +146,8 @@ def printNodes(nodeId: str, distance: int):
     if not node:
         print("Node " + nodeId + " not found")
         return
-    for url in urls.values():
+    for url in nodes.values():
         url.visited = False
-    for topic in topics.values():
-        topic.visited = False
     printNodesR(node, distance, 0)
 
 
@@ -182,13 +163,13 @@ def printNodesR(node: Node, maxDistance: int, currentDistance: int):
 
 
 def addUrl(urlStr: str):
-    if urlStr in urls:
+    if urlStr in nodes:
         print(urlStr + " already exists")
-        urlId = urls[urlStr].id
+        urlId = nodes[urlStr].id
         printNodes(urlId, 1)
         return
-    url = Url.newUrl(urlStr)
-    urls[urlStr] = url
+    url = Node.newUrl(urlStr)
+    nodes[urlStr] = url
     idToNode[url.id] = url
     save()
     print("Added " + str(url))
@@ -201,20 +182,20 @@ def removeUrl(urlId: str):
         return
     for neighbor in url.neighbors:
         neighbor.neighbors.remove(url)
-    del urls[url.name]
+    del nodes[url.name]
     del idToNode[url.id]
     save()
     print("Removed " + str(url))
 
 
 def addTopic(topicStr: str):
-    if topicStr in topics:
+    if topicStr in nodes:
         print(topicStr + " already exists")
-        topicId = topics[topicStr].id
+        topicId = nodes[topicStr].id
         printNodes(topicId, 1)
         return
-    topic = Topic.newTopic(topicStr)
-    topics[topicStr] = topic
+    topic = Node.newTopic(topicStr)
+    nodes[topicStr] = topic
     idToNode[topic.id] = topic
     save()
     print("Added " + str(topic))
@@ -227,7 +208,7 @@ def removeTopic(topicId: str):
         return
     for neighbor in topic.neighbors:
         neighbor.neighbors.remove(topic)
-    del topics[topic.name]
+    del nodes[topic.name]
     del idToNode[topic.id]
     save()
     print("Removed " + str(topic))
