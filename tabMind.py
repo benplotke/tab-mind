@@ -9,6 +9,7 @@ TOPICS = "topics"
 EDGES = "edges"
 ID = "id"
 URL = "url"
+DESCRIPTION = "description"
 TOPIC = "topic"
 DATA_PATH = "tabs.json"
 
@@ -21,17 +22,21 @@ class NodeType(Enum):
     URL = 1
     TOPIC = 2
 
+    def __str__(self):
+        return f"{self.name}"
+
 
 class Node:
-    def __init__(self, uuid: str, name: str, nodeType: NodeType, neighbors: set[Node] = None):
+    def __init__(self, uuid: str, name: str, description: str, nodeType: NodeType, neighbors: set[Node] = None):
         self.id = uuid
         self.name = name
+        self.description = description
         self.type = nodeType
         self.neighbors = set() if neighbors is None else neighbors
         self.visited = False
 
     def __str__(self):
-        return f"url:{self.name} id:{self.id}"
+        return f"{self.type}:{self.name}, id:{self.id}, description:{self.description}"
 
     def __lt__(self, other):
         return self.name < other.name
@@ -43,12 +48,12 @@ class Node:
         return hash(self.name)
 
     @classmethod
-    def newUrl(cls, url: str):
-        return cls(str(newUuid()), url, NodeType.URL)
+    def newUrl(cls, url: str, description: str):
+        return cls(str(newUuid()), url, description, NodeType.URL)
 
     @classmethod
-    def newTopic(cls, topic: str):
-        return cls(str(newUuid()), topic, NodeType.TOPIC)
+    def newTopic(cls, topic: str, description: str):
+        return cls(str(newUuid()), topic, description, NodeType.TOPIC)
 
 
 def getNode(identifier: str):
@@ -96,13 +101,15 @@ def load():
     for rawUrl in data[URLS]:
         uuid = rawUrl[ID]
         urlStr = rawUrl[URL]
-        url = Node(uuid, urlStr, NodeType.URL)
+        description = rawUrl[DESCRIPTION] if DESCRIPTION in rawUrl else ""
+        url = Node(uuid, urlStr, description, NodeType.URL)
         nodes[urlStr] = url
         idToNode[uuid] = url
     for rawTopic in data[TOPICS]:
         uuid = rawTopic[ID]
         topicStr = rawTopic[TOPIC]
-        topic = Node(uuid, topicStr, NodeType.TOPIC)
+        description = rawTopic[DESCRIPTION] if DESCRIPTION in rawTopic else ""
+        topic = Node(uuid, topicStr, description, NodeType.TOPIC)
         nodes[topicStr] = topic
         idToNode[uuid] = topic
     for rawEdge in data[EDGES]:
@@ -150,6 +157,10 @@ def printNodes(nodeId: str, distance: int):
         url.visited = False
     printNodesR(node, distance, 0)
 
+def printEdges():
+    for edge in edges:
+        print(edge)
+
 
 def printNodesR(node: Node, maxDistance: int, currentDistance: int):
     if maxDistance < currentDistance:
@@ -162,13 +173,13 @@ def printNodesR(node: Node, maxDistance: int, currentDistance: int):
         printNodesR(neighbor, maxDistance, currentDistance + 1)
 
 
-def addUrl(urlStr: str):
+def addUrl(urlStr: str, description: str):
     if urlStr in nodes:
         print(urlStr + " already exists")
         urlId = nodes[urlStr].id
         printNodes(urlId, 1)
         return
-    url = Node.newUrl(urlStr)
+    url = Node.newUrl(urlStr, description)
     nodes[urlStr] = url
     idToNode[url.id] = url
     save()
@@ -188,13 +199,13 @@ def removeUrl(urlId: str):
     print("Removed " + str(url))
 
 
-def addTopic(topicStr: str):
+def addTopic(topicStr: str, description: str):
     if topicStr in nodes:
         print(topicStr + " already exists")
         topicId = nodes[topicStr].id
         printNodes(topicId, 1)
         return
-    topic = Node.newTopic(topicStr)
+    topic = Node.newTopic(topicStr, description)
     nodes[topicStr] = topic
     idToNode[topic.id] = topic
     save()
@@ -258,59 +269,64 @@ def printOptions():
     print("? - print available commands")
     print("pu - print urls")
     print("pt - print topics")
-    print("pn node n - print nodes >= n distance from specified node")
-    print("au url - add url")
-    print("at topic - add topic")
-    print("ae node1 node2 - add edge between two nodes")
-    print("ru - remove url")
-    print("rt - remove topic")
-    print("re - remove edge between two nodes")
+    print("pe - print edges")
+    print("pn, <node>, <n> - print nodes >= n distance from specified node")
+    print("au, <url>, <description> - add url")
+    print("at, <topic>, <description> - add topic")
+    print("ae, <node1>, <node2> - add edge between two nodes")
+    print("ru, <url> - remove url")
+    print("rt, <topic> - remove topic")
+    print("re, <node1>, <node2> - remove edge between two nodes")
 
 
 def repl():
     while True:
         try:
             cmd = input("enter command (? for options):")
-            args = cmd.split()
+            args = [s.strip() for s in cmd.split(",")]
             if args[0] == "?":
                 printOptions()
             elif args[0] == "pu":
                 printUrls()
             elif args[0] == "pt":
                 printTopics()
+            elif args[0] == "pe":
+                printEdges()
             elif args[0] == "pn":
                 if len(args) != 3:
-                    print("Wrong number of arguments for command " + args[0])
+                    print(f"Wrong number of arguments for command '{args[0]}'")
                 else:
                     printNodes(args[1], int(args[2]))
             elif args[0] == "au":
-                if len(args) != 2:
-                    print("Wrong number of arguments for command " + args[0])
+                if len(args) < 2 or len(args) > 3:
+                    print(f"Wrong number of arguments for command '{args[0]}'")
                 else:
-                    addUrl(args[1])
+                    description = args[2] if len(args) == 3 else ""
+                    addUrl(args[1], description)
             elif args[0] == "at":
-                if len(args) != 2:
-                    print("Wrong number of arguments for command " + args[0])
+                if len(args) < 2 or len(args) > 3:
+                    print(f"Wrong number of arguments for command '{args[0]}'")
                 else:
-                    addTopic(args[1])
+                    description = args[2] if len(args) == 3 else ""
+                    addTopic(args[1], description)
             elif args[0] == "ae":
                 if len(args) != 3:
-                    print("Wrong number of arguments for command " + args[0])
+                    print(f"Wrong number of arguments for command '{args[0]}'")
                 else:
                     addEdge(args[1], args[2])
             elif args[0] == "ru":
                 if len(args) != 2:
-                    print("Wrong number of arguments for command " + args[0])
+                    print(f"Wrong number of arguments for command '{args[0]}'")
                 else:
                     removeUrl(args[1])
             elif args[0] == "rt":
                 if len(args) != 2:
-                    print("Wrong number of arguments for command " + args[0])
+                    print(f"Wrong number of arguments for command '{args[0]}'")
                 else:
                     removeTopic(args[1])
             elif args[0] == "re":
                 if len(args) != 3:
-                    print("Wrong number of arguments for command " + args[0])
+                    print(f"Wrong number of arguments for command '{args[0]}'")
                 else:
                     removeEdge(args[1], args[2])
         except Exception as e:
