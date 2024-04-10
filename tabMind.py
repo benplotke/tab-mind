@@ -264,26 +264,31 @@ def removeEdge(id1: str, id2: str):
     save()
     print("Removed edge between " + str(node1) + " and " + str(node2))
 
+def parseDescription(args: list[str]):
+    description = " ".join(args[2:]) if len(args) > 2 else ""
+    description = description.strip("'")
+    return description.strip('"')
+
 
 def printOptions():
     print("? - print available commands")
     print("pu - print urls")
     print("pt - print topics")
     print("pe - print edges")
-    print("pn, <node>, <n> - print nodes >= n distance from specified node")
-    print("au, <url>, <description> - add url")
-    print("at, <topic>, <description> - add topic")
-    print("ae, <node1>, <node2> - add edge between two nodes")
-    print("ru, <url> - remove url")
-    print("rt, <topic> - remove topic")
-    print("re, <node1>, <node2> - remove edge between two nodes")
+    print("pn <node> <n> - print nodes >= n distance from specified node")
+    print("au <url> <description> - add url")
+    print("at <topic> <description> - add topic")
+    print("ae <node1> <node2> - add edge between two nodes")
+    print("ru <url> - remove url")
+    print("rt <topic> - remove topic")
+    print("re <node1> <node2> - remove edge between two nodes")
 
 
 def repl():
     while True:
         try:
             cmd = input("enter command (? for options):")
-            args = [s.strip() for s in cmd.split(",")]
+            args = [s.strip() for s in cmd.split()]
             if args[0] == "?":
                 printOptions()
             elif args[0] == "pu":
@@ -298,16 +303,16 @@ def repl():
                 else:
                     printNodes(args[1], int(args[2]))
             elif args[0] == "au":
-                if len(args) < 2 or len(args) > 3:
+                if len(args) < 2:
                     print(f"Wrong number of arguments for command '{args[0]}'")
                 else:
-                    description = args[2] if len(args) == 3 else ""
+                    description = parseDescription(args)
                     addUrl(args[1], description)
             elif args[0] == "at":
-                if len(args) < 2 or len(args) > 3:
+                if len(args) < 2:
                     print(f"Wrong number of arguments for command '{args[0]}'")
                 else:
-                    description = args[2] if len(args) == 3 else ""
+                    description = parseDescription(args)
                     addTopic(args[1], description)
             elif args[0] == "ae":
                 if len(args) != 3:
@@ -329,6 +334,8 @@ def repl():
                     print(f"Wrong number of arguments for command '{args[0]}'")
                 else:
                     removeEdge(args[1], args[2])
+            else:
+                print("unrecognized command:" + args[0])
         except Exception as e:
             print("Command failed")
             print(e)
